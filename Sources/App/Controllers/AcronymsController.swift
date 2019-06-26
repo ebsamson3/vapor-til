@@ -7,14 +7,21 @@ struct AcronymsController: RouteCollection {
 		let acronymsRoutes = router.grouped("api","acronyms")
 		
 		acronymsRoutes.post(Acronym.self, use: createHandler)
+		acronymsRoutes.post(
+			Acronym.parameter, "categories", Category.parameter,
+			use: addCategoriesHandler)
 		acronymsRoutes.get(Acronym.parameter, use: getHandler)
 		acronymsRoutes.put(Acronym.parameter, use: updateHandler)
 		acronymsRoutes.delete(Acronym.parameter, use: deleteHandler)
+		acronymsRoutes.delete(
+			Acronym.parameter, "categories", Category.parameter,
+			use: removeCategoryHandler)
 		acronymsRoutes.get("search", use: searchHandler)
 		acronymsRoutes.get("first", use: getFirstHandler)
 		acronymsRoutes.get("sorted", use: sortedHandler)
 		acronymsRoutes.get(use: getAllHandler)
 		acronymsRoutes.get(Acronym.parameter, "user", use: getUserHandler)
+		acronymsRoutes.get(Acronym.parameter, "categories", use: getCategoriesHandler)
 	}
 	
 	func createHandler(_ req: Request, acronym: Acronym) throws -> Future<Acronym> {
@@ -82,6 +89,35 @@ struct AcronymsController: RouteCollection {
 		return try req.parameters.next(Acronym.self)
 			.flatMap(to: User.self) { acronym in
 				acronym.user.get(on: req)
+		}
+	}
+	
+	func addCategoriesHandler(_ req: Request) throws -> Future<HTTPStatus> {
+		return try flatMap(
+			to: HTTPStatus.self,
+			req.parameters.next(Acronym.self),
+			req.parameters.next(Category.self)) { (acronym, category) in
+				return acronym.categories
+					.attach(category, on: req)
+					.transform(to: .created)
+		}
+	}
+	
+	func getCategoriesHandler(_ req: Request) throws -> Future<[Category]> {
+		return try req.parameters.next(Acronym.self)
+			.flatMap(to: [Category].self) { acronym in
+				try acronym.categories.query(on: req).all()
+		}
+	}
+	
+	func removeCategoryHandler(_ req: Request) throws -> Future<HTTPStatus> {
+		return try flatMap(
+			to: HTTPStatus.self,
+			req.parameters.next(Acronym.self),
+			req.parameters.next(Category.self)) { (acronym, category) in
+				return acronym.categories
+					.detach(category, on: req)
+					.transform(to: .noContent)
 		}
 	}
 }
